@@ -295,7 +295,7 @@ impl<E: Emitter> InnerVisitor for ReprGenerator<E> {
         self.emitter.opener(crate::names::pat_discrim(x));
     }
     fn open_lit_int(&mut self, x: &syn::LitInt) {
-        self.open_subtree();
+        self.open_datum();
         self.emitter.item(x.value());
     }
 
