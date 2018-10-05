@@ -51,7 +51,7 @@ fn main() {
         };
         */
         trace!("debug_tree_repr: {}", pat.debug_tree_repr());
-        trace!("debug_flat_repr:\n{}", pat.debug_flat_repr());
+        //trace!("debug_flat_repr:\n{}", pat.debug_flat_repr());
     }
     //trace!("irs: {:#?}", pats);
     /*

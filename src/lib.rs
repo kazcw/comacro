@@ -5,6 +5,7 @@ mod tokens;
 pub use proc_macro2;
 pub use crate::ir::Ir;
 
+use log::trace;
 use proc_macro2::TokenStream;
 use syn::parse::Parse;
 use crate::tokens::MetaContext;
@@ -39,40 +40,43 @@ impl Parse for Stmts {
     }
 }
 
-pub struct PatternDef(TokenStream);
+pub struct PatternDef{ nodes: TokenStream, ids: TokenStream }
 impl PatternDef {
     pub fn lex(args: TokenStream, body: TokenStream) -> PatternDef {
-        PatternDef(MetaContext::new(args).apply(body))
+        let (nodes, ids) = MetaContext::new(args).apply(body);
+        PatternDef{ nodes, ids }
     }
 
     pub fn parse(self) -> Result<Pattern> {
-        let metasyn: Stmts = syn::parse2(self.0).map_err(|e| {
-            Error/*{
-                message: e.to_string(),
-                location: Some((e.span().start(), e.span().end())),
-            }*/
-        })?;
-        Ok(Pattern(metasyn.0))
+        trace!("nodes: {}", &self.nodes);
+        trace!("ids: {}", &self.ids);
+        /*{
+            message: e.to_string(),
+            location: Some((e.span().start(), e.span().end())),
+        }*/
+        let nodes: Stmts = syn::parse2(self.nodes).map_err(|_| Error)?;
+        let ids: Stmts = syn::parse2(self.ids).map_err(|_| Error)?;
+        Ok(Pattern{ nodes: nodes.0, ids: ids.0 })
     }
 }
 
-pub struct Pattern(Vec<syn::Stmt>);
+pub struct Pattern{ nodes: Vec<syn::Stmt>, ids: Vec<syn::Stmt> }
 impl Pattern {
     pub fn compile(&self) -> Ir {
-        ir::compile(&self.0)
+        ir::compile(&self.nodes, &self.ids)
     }
 
     pub fn debug_tree_repr(&self) -> String {
-        ir::debug_tree_repr(&self.0)
+        ir::debug_tree_repr(&self.nodes, &self.ids)
     }
 
     pub fn debug_flat_repr(&self) -> String {
-        ir::debug_flat_repr(&self.0)
+        ir::debug_flat_repr(&self.nodes, &self.ids)
     }
 }
 
 impl Display for PatternDef {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", &self.0)
+        write!(fmt, "PatternDef {{ nodes: {}, ids: {} }}", &self.nodes, &self.ids)
     }
 }

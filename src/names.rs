@@ -41,8 +41,6 @@ pub(crate) fn expr_discrim(x: &syn::Expr) -> &'static str {
         TryBlock(..) => "TryBlock",
         Yield(..) => "Yield",
         Verbatim(..) => "Verbatim",
-        Meta(..) => "Meta",
-        MetaUnbound(..) => "MetaUnbound",
     }
 }
 

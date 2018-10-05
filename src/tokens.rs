@@ -8,44 +8,6 @@ use proc_macro2::{TokenStream, TokenTree};
 
 use log::trace;
 use std::collections::HashMap;
-use std::num::NonZeroU32;
-
-#[derive(Debug, PartialEq, Eq)]
-enum NodeType {
-    Ident,
-    Expr,
-    // ...
-}
-
-impl NodeType {
-    fn to_token(&self) -> TokenTree {
-        let id = match *self {
-            self::NodeType::Ident => '@',
-            self::NodeType::Expr => '*',
-        };
-        //proc_macro2::Ident::new(id, proc_macro2::Span::call_site()).into()
-        proc_macro2::Punct::new(id, proc_macro2::Spacing::Alone).into()
-    }
-}
-
-#[derive(Debug)]
-struct Id {
-    n: NonZeroU32,
-}
-
-impl Id {
-    fn to_token(&self) -> TokenTree {
-        proc_macro2::Literal::u32_unsuffixed(self.n.get()).into()
-    }
-}
-
-#[derive(Debug)]
-struct MetaDef {
-    /// AST type for parser
-    node: NodeType,
-    /// unique identifier for each metavar
-    id: Id,
-}
 
 type DefMap = HashMap<String, MetaDef>;
 
@@ -53,76 +15,98 @@ type DefMap = HashMap<String, MetaDef>;
 enum MacBodyState {
     AwaitingDollar,
     AwaitingIdent,
-    Cont(TokenTree),
+    Cont,
 }
 
-struct MacBodyTransducer<'a, It> {
+struct MacBodyTransducer<'a, It, F> {
     ts: It,
     defs: &'a DefMap,
     state: MacBodyState,
+    cont: Vec<TokenTree>,
+    tokenize: &'a F,
 }
 
-impl<'a, It> MacBodyTransducer<'a, It> {
-    fn new(ts: It, defs: &'a DefMap) -> Self {
+impl<'a, It, F> MacBodyTransducer<'a, It, F> {
+    fn new(ts: It, defs: &'a DefMap, tokenize: &'a F) -> Self {
         let state = MacBodyState::AwaitingDollar;
-        MacBodyTransducer { ts, defs, state }
+        let cont = Vec::new();
+        MacBodyTransducer { ts, defs, state, cont, tokenize }
     }
 }
 
-// fast flat state machine
-// or simply spew out vectors
-// generators plz?
+#[derive(Debug)]
+pub enum NodeType {
+    Expr,
+    Ident,
+}
 
-impl<'a, It: Iterator<Item = TokenTree>> Iterator for MacBodyTransducer<'a, It> {
+#[derive(Debug)]
+struct MetaDef {
+    node: NodeType,
+    id: u32,
+}
+
+impl MetaDef {
+    // placeholder token that must:
+    // - parse as the right syntactic type
+    // - always differ from the corresponding id_token
+    fn node_token(&self) -> TokenTree {
+        match self.node {
+            self::NodeType::Ident => syn::Ident::new("__IDENT", proc_macro2::Span::call_site()).into(),
+            self::NodeType::Expr => syn::Ident::new("__EXPR", proc_macro2::Span::call_site()).into(),
+        }
+    }
+
+    // placeholder token that must:
+    // - always differ from the corresponding node_token
+    // - parse as the right syntactic type
+    // - encode a mvar id
+    fn id_token(&self) -> TokenTree {
+        match self.node {
+            self::NodeType::Ident => syn::Ident::new(&format!("IDENT_{}", self.id), proc_macro2::Span::call_site()).into(),
+            //self::NodeType::Expr => proc_macro2::Literal::u32_suffixed(self.id).into()
+            self::NodeType::Expr => syn::Ident::new(&format!("EXPR_{}", self.id), proc_macro2::Span::call_site()).into(),
+        }
+    }
+}
+
+impl<'a, It: Iterator<Item = TokenTree>, F: Fn(&MetaDef) -> TokenTree> Iterator for MacBodyTransducer<'a, It, F> {
     type Item = TokenTree;
 
     fn next(&mut self) -> Option<TokenTree> {
         use self::MacBodyState::*;
         use proc_macro2::TokenTree::*;
-        // better way to do this? (replace value if match)
-        if let Cont(_) = self.state {
-            if let Cont(tt) = std::mem::replace(&mut self.state, AwaitingDollar) {
-                return Some(tt);
+        if let Cont = self.state {
+            if self.cont.is_empty() {
+                self.state = AwaitingDollar;
+            } else {
+                return self.cont.pop();
             }
-            unreachable!();
         }
         let tt = self.ts.next();
         match (&self.state, tt) {
             (AwaitingDollar, Some(Punct(ref c))) if c.as_char() == '$' => {
                 self.state = AwaitingIdent;
-                Some(Punct(c.clone()))
+                self.next()
             }
+            (AwaitingDollar, Some(Group(ref g))) => {
+                let delim = g.delimiter();
+                let ts = MacBodyTransducer::new(g.stream().into_iter(), self.defs, self.tokenize).collect();
+                Some(proc_macro2::Group::new(delim, ts).into())
+            },
             (AwaitingDollar, x) => x,
             (AwaitingIdent, Some(Ident(id))) => {
                 self.state = AwaitingDollar;
-                match self.defs.get(&id.to_string()) {
-                    Some(MetaDef { node, id }) => {
-                        if *node == self::NodeType::Ident {
-                            // shoehorn into an magic identifier until I finish wrapping syn's
-                            // Ident in an enum
-                            self.state = AwaitingDollar;
-                            Some(syn::Ident::new(&format!("__COMACRO_{}", id.n.get()), proc_macro2::Span::call_site()).into())
-                        } else {
-                            let (type_tok, id_tok) = (node.to_token(), id.to_token());
-                            self.state = Cont(id_tok);
-                            Some(type_tok)
-                        }
-                    }
-                    None => panic!(),
-                }
-            }
-            (AwaitingIdent, Some(Punct(ref c))) if c.as_char() == '_' => {
-                self.state = AwaitingDollar;
-                Some(Punct(c.clone()))
+                Some((self.tokenize)(&self.defs[&id.to_string()]))
             }
             (AwaitingIdent, Some(Punct(ref c))) if c.as_char() == '$' => {
                 self.state = AwaitingDollar;
-                self.next()
+                Some(Punct(c.clone()))
             }
             (AwaitingIdent, _) => {
-                panic!("macro body parse failure: after '$', expected one of: identifier, '_', '$'")
+                panic!("macro body parse failure: after '$', expected one of: identifier, '$'")
             }
-            (Cont(_), _) => unreachable!(),
+            (Cont, _) => unreachable!(),
         }
     }
 }
@@ -160,9 +144,7 @@ fn parse_args(ts: TokenStream) -> DefMap {
         };
         let def = MetaDef {
             node,
-            id: Id {
-                n: NonZeroU32::new((args.len() + 1) as u32).unwrap(),
-            },
+            id: (args.len() + 1) as u32,
         };
         let prev_def = args.insert(id, def);
         assert!(prev_def.is_none());
@@ -183,14 +165,10 @@ impl MetaContext {
         MetaContext { bindings }
     }
 
-    /// Embed the info from the context into the TS to make the declared type info accessible to
-    /// the metasyn parser.
-    /// ($foo:expr, $bar:ident) { let $bar: $_ = $foo }
-    /// =>
-    /// { let $I 2: $_ = $X 1 }
-    pub fn apply(&self, ts: TokenStream) -> TokenStream {
-        let ducer = MacBodyTransducer::new(ts.into_iter(), &self.bindings);
-        ducer.collect()
+    pub fn apply(&self, ts: TokenStream) -> (TokenStream, TokenStream) {
+        let nodes = MacBodyTransducer::new(ts.clone().into_iter(), &self.bindings, &MetaDef::node_token);
+        let ids = MacBodyTransducer::new(ts.into_iter(), &self.bindings, &MetaDef::id_token);
+        (nodes.collect(), ids.collect())
     }
 }
 

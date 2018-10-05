@@ -1,5 +1,5 @@
 macro manual_swap($t: ident, $x: expr, $y: expr) {
     let $t = $x;
-    $x = $y;
+    $x = ($y + $y);
     $y = $t;
 }
