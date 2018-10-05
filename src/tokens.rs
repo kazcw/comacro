@@ -106,7 +106,7 @@ impl<'a, It: Iterator<Item = TokenTree>, F: Fn(&MetaDef) -> TokenTree> Iterator 
             (AwaitingIdent, _) => {
                 panic!("macro body parse failure: after '$', expected one of: identifier, '$'")
             }
-            (Cont, _) => unreachable!(),
+            (Cont, _) => unreachable!("Cont handled before advancing ts"),
         }
     }
 }

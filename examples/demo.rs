@@ -2,7 +2,7 @@
 
 use log::*;
 
-use comacro::{Pattern, PatternDef};
+use comacro::PatternDef;
 
 fn main() {
     env_logger::init();

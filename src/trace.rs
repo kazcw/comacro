@@ -1,3 +1,6 @@
+use log::trace;
+use std::fmt::Debug;
+
 const META: u8 = 255;
 const OPEN: u8 = 254;
 const CLOSE: u8 = 253;
@@ -9,7 +12,6 @@ pub(crate) struct Trace {
     datum: Option<usize>,
 }
 
-use std::fmt::Debug;
 impl Debug for Trace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut i = 0;
@@ -32,35 +34,35 @@ impl Debug for Trace {
 }
 
 impl Trace {
-    pub(crate) fn push_byte(&mut self, data: u8) {
+    pub fn push_byte(&mut self, data: u8) {
         self.buf.push(data);
         if data == META {
             self.buf.push(data);
         }
     }
 
-    pub(crate) fn extend_bytes(&mut self, data: &[u8]) {
+    pub fn extend_bytes(&mut self, data: &[u8]) {
         // TODO: less pessimal impl?
         for x in data { self.push_byte(*x); }
     }
 
-    pub(crate) fn open_subtree(&mut self) {
+    pub fn open_subtree(&mut self) {
         self.buf.push(META);
         self.buf.push(OPEN);
     }
 
-    pub(crate) fn close_subtree(&mut self) {
+    pub fn close_subtree(&mut self) {
         self.buf.push(META);
         self.buf.push(CLOSE);
     }
 
-    pub(crate) fn open_datum(&mut self) {
+    pub fn open_datum(&mut self) {
         self.buf.push(0);
         assert!(self.datum.is_none());
         self.datum = Some(self.buf.len() - 1);
     }
 
-    pub(crate) fn close_datum(&mut self) {
+    pub fn close_datum(&mut self) {
         let open = self.datum.expect("open before closing");
         self.datum = None;
         let diff = self.buf.len() - open;
@@ -72,7 +74,7 @@ impl Trace {
         self.buf[open] = smol_diff;
     }
 
-    pub(crate) fn push_mvar(&mut self, mvar: u8) {
+    pub fn push_mvar(&mut self, mvar: u8) {
         assert!(mvar != META);
         assert!(mvar != OPEN);
         assert!(mvar != CLOSE);
@@ -80,7 +82,7 @@ impl Trace {
         self.buf.push(mvar);
     }
 
-    pub(crate) fn finish(self) -> Vec<u8> {
+    pub fn finish(self) -> Vec<u8> {
         self.buf
     }
 }
@@ -94,10 +96,10 @@ pub(crate) struct ReTrace {
 }
 
 impl ReTrace {
-    pub(crate) fn new(buf: Vec<u8>) -> Self {
+    pub fn new(buf: Vec<u8>) -> Self {
         ReTrace { buf, datum: None, i: 0, diff_depth: 0 }
     }
-    pub(crate) fn finish(self) {
+    pub fn finish(self) {
         // it's a programming error to attempt to complete a trace inside a subtree
         assert!(self.datum.is_none());
         assert_eq!(self.diff_depth, 0);
@@ -106,7 +108,7 @@ impl ReTrace {
         assert_eq!(self.i, self.buf.len());
     }
 
-    pub(crate) fn push_byte(&mut self, data: u8) {
+    pub fn push_byte(&mut self, data: u8) {
         if self.diff_depth != 0 { return; }
         if self.buf[self.i] != data {
             self.diff_depth = 1;
@@ -122,13 +124,13 @@ impl ReTrace {
         }
     }
 
-    pub(crate) fn extend_bytes(&mut self, data: &[u8]) {
+    pub fn extend_bytes(&mut self, data: &[u8]) {
         // TODO: less pessimal impl?
         for x in data { self.push_byte(*x); }
     }
 
     /// on failure, nothing has been consumed
-    pub(crate) fn open_subtree(&mut self) -> Result<(), ()> {
+    pub fn open_subtree(&mut self) -> Result<(), ()> {
         //trace!("ReTrace::open_subtree: diff_depth={}", self.diff_depth);
         if self.diff_depth != 0 {
             self.diff_depth += 1;
@@ -148,7 +150,7 @@ impl ReTrace {
     // - count depth within dead subtree
 
     /// on failure, this mismatching subtree has been consumed
-    pub(crate) fn close_subtree(&mut self) -> Result<(), ()> {
+    pub fn close_subtree(&mut self) -> Result<(), ()> {
         //trace!("ReTrace::close_subtree: diff_depth={}", self.diff_depth);
         if self.diff_depth == 0 {
             if self.buf[self.i] != META || self.buf[self.i + 1] != CLOSE {
@@ -169,18 +171,18 @@ impl ReTrace {
         Err(())
     }
 
-    pub(crate) fn open_datum(&mut self) {
+    pub fn open_datum(&mut self) {
         assert!(self.datum.is_none());
         self.datum = Some(self.i + usize::from(self.buf[self.i]));
         self.i += 1;
     }
 
-    pub(crate) fn close_datum(&mut self) {
+    pub fn close_datum(&mut self) {
         assert_eq!(self.datum, Some(self.i));
         self.datum = None;
     }
 
-    pub(crate) fn consume_meta(&mut self) -> u8 {
+    pub fn consume_meta(&mut self) -> u8 {
         let x = self.buf[self.i];
         assert_eq!(x, META);
         self.i += 1;
@@ -204,27 +206,27 @@ pub(crate) struct TxTrace {
 }
 
 impl TxTrace {
-    pub(crate) fn new(trace: Trace) -> Self {
+    pub fn new(trace: Trace) -> Self {
         TxTrace { trace, replacement: Trace::default(), stack: Vec::new(), rollbacks: 0 }
     }
-    pub(crate) fn finish(self) -> Vec<u8> {
+    pub fn finish(self) -> Vec<u8> {
         assert!(self.stack.is_empty());
         assert!(self.replacement.buf.is_empty());
         assert_eq!(self.rollbacks, 0);
         self.trace.finish()
     }
 
-    pub(crate) fn push_byte(&mut self, data: u8) { self.trace.push_byte(data); }
-    pub(crate) fn extend_bytes(&mut self, data: &[u8]) { self.trace.extend_bytes(data); }
-    pub(crate) fn open_datum(&mut self) { self.trace.open_datum(); }
-    pub(crate) fn close_datum(&mut self) { self.trace.close_datum(); }
+    pub fn push_byte(&mut self, data: u8) { self.trace.push_byte(data); }
+    pub fn extend_bytes(&mut self, data: &[u8]) { self.trace.extend_bytes(data); }
+    pub fn open_datum(&mut self) { self.trace.open_datum(); }
+    pub fn close_datum(&mut self) { self.trace.close_datum(); }
 
-    pub(crate) fn open_subtree(&mut self) {
+    pub fn open_subtree(&mut self) {
         self.stack.push(self.trace.buf.len());
         self.trace.open_subtree();
         //trace!("TxTrace::open_subtree: {:?}", self.trace);
     }
-    pub(crate) fn close_subtree(&mut self) {
+    pub fn close_subtree(&mut self) {
         self.trace.close_subtree();
         let start = self.stack.pop().unwrap();
         if self.rollbacks > 0 {
@@ -241,7 +243,7 @@ impl TxTrace {
             //trace!("TxTrace::close_subtree: {:?}", self.trace);
         }
     }
-    pub(crate) fn rollback(&mut self, depth: usize) {
+    pub fn rollback(&mut self, depth: usize) {
         assert_eq!(self.rollbacks, 0);
         self.rollbacks = depth + 1;
         //trace!("TxTrace::rollback: {}", self.rollbacks);
@@ -255,45 +257,46 @@ pub(crate) struct DeltaTrace {
 }
 
 impl DeltaTrace {
-    pub(crate) fn new(old: Vec<u8>) -> Self {
+    pub fn new(old: Vec<u8>) -> Self {
         let old_len = old.len();
         let old = ReTrace::new(old);
         let new = TxTrace::new (Trace { buf: Vec::with_capacity(old_len), ..Default::default()});
         DeltaTrace { old, new }
     }
-    pub(crate) fn finish(self) -> Vec<u8> {
+    pub fn finish(self) -> Vec<u8> {
+        trace!("DeltaTrace::finish: new={:?}", self.new.trace);
         self.old.finish();
         self.new.finish()
     }
 
-    pub(crate) fn push_byte(&mut self, data: u8) {
+    pub fn push_byte(&mut self, data: u8) {
         self.old.push_byte(data);
         self.new.push_byte(data);
     }
 
-    pub(crate) fn extend_bytes(&mut self, data: &[u8]) {
+    pub fn extend_bytes(&mut self, data: &[u8]) {
         self.old.extend_bytes(data);
         self.new.extend_bytes(data);
     }
 
-    pub(crate) fn open_subtree(&mut self) -> Result<(), ()> {
+    pub fn open_subtree(&mut self) -> Result<(), ()> {
         self.old.open_subtree()?;
         self.new.open_subtree();
         Ok(())
     }
 
-    pub(crate) fn close_subtree(&mut self) -> Result<(), ()> {
+    pub fn close_subtree(&mut self) -> Result<(), ()> {
         self.old.close_subtree()?;
         self.new.close_subtree();
         Ok(())
     }
 
-    pub(crate) fn open_datum(&mut self) {
+    pub fn open_datum(&mut self) {
         self.old.open_datum();
         self.new.open_datum();
     }
 
-    pub(crate) fn close_datum(&mut self) {
+    pub fn close_datum(&mut self) {
         self.old.close_datum();
         self.new.close_datum();
     }
