@@ -1,6 +1,7 @@
 mod ir;
 mod names;
 mod tokens;
+mod trace;
 
 pub use proc_macro2;
 pub use crate::ir::Ir;
