@@ -318,60 +318,6 @@ impl DeltaTrace {
     }
 }
 
-// different AST visitors:
-// Matchable:
-// - discriminants: binary (byte)
-// - terminals: binary (varlen)
-// - subtrees: seekable (length-prefix based)
-// Printable:
-// - discriminants: named
-// - terminals: pretty
-// - subtrees: readable (bracketed)
-// both:
-// - types: implicit in structure
-
-// TODO: META Expr
-/*
-if let syn::Expr::Meta(x) = x {
-    let id = x.id.value();
-    self.buf.push(TreeByte { node: Node::Wildcard });
-    assert!(id <= 255);
-    let data = id as u8;
-    self.buf.push(TreeByte { data });
-    return;
-}
-*/
-
-// - some placeholders indicate the *parent* node is a mvar!
-
-// { ExprPat { __EXPR } }
-// { ExprPat { EXPR_<N> } }
-
-// { PLACEHOLDER_IDENT }
-// { IDENT_<N> }
-
-// - interpretation of discriminants depends on context, so MatchCode-only placeholder
-//   classification is only sound if placeholders have different byte representations
-
-// emitting MatchCode
-
-// binding (after comparing MatchCode):
-// - instead of actual output, count along (track output lengths) and compare
-// - only place difference may occur is open_subtree, in which case current MatchCode position
-//   encodes a metavar
-
-// emitting treerepr:
-// - visit <nodes>, following along in pattern as if binding
-
-// reconciling <nodes> and <ids>
-// - emit new, while following along in old
-// - mismatch may occur at certain predictable points
-// - mismatch causes rollback, potentially of an ancestor, and replacement with new value
-
-// MatchCodeGenerator's Trace: infallible, just builds a buf; lets caller manage subtree handles
-// Reconciling DeltaTrace: close_subtree may fail; manages stack internally to support rollbacks
-// Binding/TreeRepr ReTrace: open_subtree may fail; everything else must not
-
 struct Visitor<V> {
     inner: V,
 }
@@ -666,35 +612,6 @@ impl ReprBuilder for DebugStringBuilder {
         self.body.push('$');
         self.body.push_str(&x.to_string());
         self.body.push(' ');
-    }
-}
-
-// TODO: make this a macro instead of type-erasing
-impl<'ast> Visit<'ast> for dyn ReprBuilder {
-    fn visit_stmt(&mut self, x: &syn::Stmt) {
-        self.open_stmt(x);
-        syn::visit::visit_stmt(self, x);
-        self.close_subtree();
-    }
-
-    fn visit_expr(&mut self, x: &syn::Expr) {
-        self.open_expr(x);
-        syn::visit::visit_expr(self, x);
-        self.close_subtree();
-    }
-
-    fn visit_ident(&mut self, x: &syn::Ident) {
-        self.visit_ident(x.to_string());
-    }
-
-    fn visit_lit_int(&mut self, x: u64) {
-        self.visit_lit_int(x.value());
-    }
-
-    fn visit_pat(&mut self, x: &syn::Pat) {
-        self.open_pat(x);
-        syn::visit::visit_pat(self, x);
-        self.close_subtree();
     }
 }
 
