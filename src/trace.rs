@@ -22,6 +22,11 @@ impl IndexedTrace {
     fn traces(&self) -> Traces {
         Traces { master: &self, i: 0 }
     }
+
+    // XXX this should not need to exist
+    pub fn deindex(self) -> Trace {
+        self.trace
+    }
 }
 
 struct Traces<'a> {

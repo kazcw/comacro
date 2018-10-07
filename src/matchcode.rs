@@ -278,7 +278,7 @@ pub fn bindings_repr(bindings: &'_ Bindings) -> String {
                 let mut viz = Visitor { inner: PlainAstRepr::new(JsonEmitter::new_scalar()) };
                 viz.visit_expr(x);
                 let s = String::from_utf8(viz.inner.finish()).unwrap();
-                format!("[\"Expr\",\"{}\"]", s)
+                format!("[\"Expr\",{}]", s)
             }
         }
     };

@@ -7,9 +7,9 @@ fn baz() {
     thing1 = thing2;
     thing2 = temp;
 
+    // there are two things
+    let _ = thing1 + thing2;
+
     // now let's do things with parentheses!
     let something_else_happening = (thing1 + thing1);
-
-    // two different things?
-    let _ = (thing1 + thing2);
 }

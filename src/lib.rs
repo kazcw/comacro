@@ -93,8 +93,8 @@ enum MatchesInner<'p, 'it> {
 
 #[derive(Debug)]
 pub struct Match {
-    context: String,
-    bindings: String,
+    pub context: String,
+    pub bindings: String,
 }
 
 pub struct Matches<'p, 'i, 'it> {
@@ -118,11 +118,12 @@ impl Iterator for Matches<'_, '_, '_> {
                     context.push_str(&crate::matchcode::stmt_repr(s));
                 }
                 if !first { context.push_str(","); }
-                context.push_str("$1");
+                context.push_str("\"$1\"");
                 for s in &self.input[m+self.pattern.toplevel_len()..] {
                     context.push_str(",");
                     context.push_str(&crate::matchcode::stmt_repr(s));
                 }
+                context.push_str("]");
                 let bindings = crate::matchcode::bind_stmts(self.pattern, &self.input[m..m + self.pattern.toplevel_len()]);
                 let bindings = crate::matchcode::bindings_repr(&bindings);
                 Match { context, bindings }
@@ -157,6 +158,24 @@ impl Ir {
     }
 }
 
+pub struct Input { pub stmts: Vec<syn::Stmt> }
+
+impl Input {
+    pub fn parse(ts: TokenStream) -> Result<Self> {
+        let stmts: Stmts = syn::parse2(ts).map_err(|_| Error)?;
+        let stmts = stmts.0;
+        Ok(Input { stmts })
+    }
+
+    pub fn compile(&self) -> crate::trace::IndexedTrace {
+        matchcode::compile_input(&self.stmts)
+    }
+
+    pub fn debug_tree_repr(&self) -> String {
+        matchcode::stmts_tree_repr_of(matchcode::compile_input(&self.stmts).deindex(), &self.stmts)
+    }
+}
+
 impl Pattern {
     pub fn compile(&self) -> Ir {
         match self {
@@ -176,6 +195,13 @@ impl Pattern {
         match self {
             Pattern::StmtSeq { nodes, ids } => matchcode::stmts_flat_repr(nodes, ids),
             Pattern::Expr { nodes, ids } => matchcode::expr_flat_repr(nodes, ids),
+        }
+    }
+
+    pub fn fragment(&self) -> String {
+        match self {
+            Pattern::StmtSeq { .. } => "StmtSeq".to_owned(),
+            Pattern::Expr { .. } => "Expr".to_owned(),
         }
     }
 }
