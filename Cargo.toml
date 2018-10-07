@@ -13,10 +13,10 @@ log = { version = "0.4", features = ["max_level_trace", "release_max_level_off"]
 proc-macro2 = "0.4"
 
 [dev-dependencies]
-env_logger = "*"
+env_logger = "0.5"
 proc-macro2 = { version = "0.4", features = ["nightly"] }
 
 [dependencies.syn]
-version = "*"
+version = "0.15"
 default-features = false
 features = ["full", "visit", "parsing"]
