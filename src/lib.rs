@@ -4,9 +4,11 @@ mod trace;
 
 pub use proc_macro2;
 
-pub use crate::ast::compile_input;
+use crate::ast::repr;
 
-use crate::trace::Trace;
+use crate::ast::Binder;
+use crate::trace::{Trace, IndexedTrace, ReTracer};
+use crate::ast::{Visitor, TraceGenerator, IndexedTraceGenerator, Reconciler};
 
 use crate::tokens::MetaContext;
 use log::trace;
@@ -127,7 +129,7 @@ impl Iterator for Matches<'_, '_, '_> {
                         context.push_str(",");
                     }
                     first = false;
-                    context.push_str(&crate::ast::stmt_repr(s));
+                    context.push_str(&repr::input_json(s));
                 }
                 if !first {
                     context.push_str(",");
@@ -135,30 +137,24 @@ impl Iterator for Matches<'_, '_, '_> {
                 context.push_str("\"$1\"");
                 for s in &self.input[m + self.pattern.toplevel_len()..] {
                     context.push_str(",");
-                    context.push_str(&crate::ast::stmt_repr(s));
+                    context.push_str(&repr::input_json(s));
                 }
                 context.push_str("]");
-                let bindings = crate::ast::bind_stmts(
-                    self.pattern,
-                    &self.input[m..m + self.pattern.toplevel_len()],
-                );
-                let bindings = crate::ast::bindings_repr(&bindings);
+                let binder = Binder::new(ReTracer::new(self.pattern));
+                let bindings = binder.visit(&self.input[m..m + self.pattern.toplevel_len()]);
+                let bindings = repr::bindings_json(&bindings);
                 Match { context, bindings }
             }),
             MatchesInner::Expr { matches } => matches.next().map(|m| {
-                let context = crate::ast::stmts_tree_repr_of(&m, self.input);
-                let extracted =
-                    crate::ast::bind_expr(crate::trace::ReTracer::new(&m), self.input);
-                let ex = if let crate::ast::Binding::Expr(ex) = extracted.binds[0] {
-                    ex
+                let context = repr::pattern_json(&m, self.input);
+                let extracted = Binder::new(ReTracer::new(&m)).visit(self.input);
+                let bindings = if let crate::ast::Binding::Expr(ex) = extracted.binds[0] {
+                    Binder::new(ReTracer::new(&self.pattern)).visit(ex)
                 } else {
                     unreachable!()
                 };
-                let bindings = crate::ast::bind_expr_expr(
-                    crate::trace::ReTracer::new(&self.pattern),
-                    ex,
-                );
-                let bindings = crate::ast::bindings_repr(&bindings);
+                
+                let bindings = repr::bindings_json(&bindings);
                 Match { context, bindings }
             }),
         }
@@ -204,38 +200,41 @@ impl Input {
         Ok(Input { stmts })
     }
 
-    pub fn compile(&self) -> crate::trace::IndexedTrace {
-        ast::compile_input(&self.stmts)
+    pub fn compile(&self) -> IndexedTrace {
+        IndexedTraceGenerator::with_hint(self.stmts.len()).visit(&self.stmts[..])
     }
 
     pub fn debug_tree_repr(&self) -> String {
-        ast::stmts_tree_repr_of(&ast::compile_input(&self.stmts).deindex(), &self.stmts)
+        repr::pattern_json(&self.compile().deindex(), &self.stmts[..])
     }
 }
 
 impl Pattern {
+    fn trace(&self) -> Trace {
+        match self {
+            Pattern::StmtSeq { nodes, ids } => Reconciler::new(&TraceGenerator::apply(&nodes[..])).visit(&ids[..]),
+            Pattern::Expr { nodes, ids } => Reconciler::new(&TraceGenerator::apply(nodes)).visit(ids),
+        }
+    }
+
     pub fn compile(&self) -> Ir {
         match self {
-            Pattern::StmtSeq { nodes, ids } => Ir::StmtSeq {
-                trace: ast::compile_stmts(nodes, ids),
-            },
-            Pattern::Expr { nodes, ids } => Ir::Expr {
-                trace: ast::compile_expr(nodes, ids),
-            },
+            Pattern::StmtSeq { .. } => Ir::StmtSeq { trace: self.trace() },
+            Pattern::Expr { .. } => Ir::Expr { trace: self.trace() },
         }
     }
 
     pub fn debug_tree_repr(&self) -> String {
         match self {
-            Pattern::StmtSeq { nodes, ids } => ast::stmts_tree_repr(nodes, ids),
-            Pattern::Expr { nodes, ids } => ast::expr_tree_repr(nodes, ids),
+            Pattern::StmtSeq { ids, .. } => repr::pattern_json(&self.trace(), &ids[..]),
+            Pattern::Expr { ids, .. } => repr::pattern_json(&self.trace(), ids),
         }
     }
 
     pub fn debug_flat_repr(&self) -> String {
         match self {
-            Pattern::StmtSeq { nodes, ids } => ast::stmts_flat_repr(nodes, ids),
-            Pattern::Expr { nodes, ids } => ast::expr_flat_repr(nodes, ids),
+            Pattern::StmtSeq { ids, .. } => repr::pattern_flat(&self.trace(), &ids[..]),
+            Pattern::Expr { ids, .. } => repr::pattern_flat(&self.trace(), ids),
         }
     }
 

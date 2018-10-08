@@ -1,9 +1,10 @@
 use std::fmt::Display;
 use std::io::Write;
 
-use crate::trace::*;
-use crate::ast::visitor::Visitor;
+use crate::ast::{Binding, Bindings};
 use crate::ast::names::Discrim;
+use crate::ast::visit::{Visitor, Visitable};
+use crate::trace::*;
 
 pub(crate) trait Emitter {
     fn meta(&mut self, x: u32);
@@ -170,13 +171,11 @@ impl<'t, E: Emitter> ReprGenerator<'t, E> {
         let trace = ReTracer::new(old);
         ReprGenerator { emitter, trace }
     }
-
-    pub fn finish(self) -> Vec<u8> {
-        self.emitter.finish()
-    }
 }
 
 impl<'t, 'ast, E: Emitter> Visitor<'ast> for ReprGenerator<'t, E> {
+    type Output = String;
+
     fn open_expr(&mut self, x: &syn::Expr) -> Result<(), ()> {
         if let Err(()) = self.trace.open_subtree() {
             let x = u32::from(self.trace.consume_meta());
@@ -240,6 +239,10 @@ impl<'t, 'ast, E: Emitter> Visitor<'ast> for ReprGenerator<'t, E> {
     fn extend_bytes(&mut self, x: &[u8]) {
         self.trace.extend_bytes(x);
     }
+
+    fn finish(self) -> Self::Output {
+        String::from_utf8(self.emitter.finish()).unwrap()
+    }
 }
 
 /// Serialize a normal AST (no metavars)
@@ -251,13 +254,11 @@ impl<E: Emitter> PlainAstRepr<E> {
     pub fn new(emitter: E) -> Self {
         PlainAstRepr { emitter }
     }
-
-    pub fn finish(self) -> Vec<u8> {
-        self.emitter.finish()
-    }
 }
 
 impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
+    type Output = String;
+
     fn open_expr(&mut self, x: &syn::Expr) -> Result<(), ()> {
         self.emitter.opener(x.discrim());
         Ok(())
@@ -293,4 +294,38 @@ impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
     fn close_datum(&mut self) {}
     fn push_byte(&mut self, x: u8) {}
     fn extend_bytes(&mut self, x: &[u8]) {}
+
+    fn finish(self) -> Self::Output {
+        String::from_utf8(self.emitter.finish()).unwrap()
+    }
+}
+
+pub fn pattern_json<'a, 'v: 'a, V>(trace: &Trace, v: &'v V) -> String where V: Visitable<'a>+?Sized {
+    ReprGenerator::new(trace, JsonEmitter::new()).visit(v)
+}
+
+pub fn pattern_flat<'a, 'v: 'a, V>(trace: &Trace, v: &'v V) -> String where V: Visitable<'a>+?Sized {
+    ReprGenerator::new(trace, ReprEmitter::new()).visit(v)
+}
+
+pub fn input_json<'a, 'v: 'a, V>(v: &'v V) -> String where V: Visitable<'a>+?Sized {
+    PlainAstRepr::new(JsonEmitter::new_scalar()).visit(v)
+}
+
+pub fn bindings_json(bindings: &'_ Bindings) -> String {
+    let f = |b: &Binding| match b {
+        Binding::Ident(i) => format!("[\"Ident\",\"{}\"]", i),
+        Binding::Expr(x) => format!("[\"Expr\",{}]", input_json(*x))
+    };
+    let mut buf = "[".to_owned();
+    let mut binds = bindings.binds.iter();
+    if let Some(b) = binds.next() {
+        buf.push_str(&f(b));
+    }
+    for b in binds {
+        buf.push_str(",");
+        buf.push_str(&f(b));
+    }
+    buf.push_str("]");
+    buf
 }
