@@ -68,7 +68,7 @@ impl Emitter for ReprEmitter {
 
     fn maybe_break(&mut self) {
         if self.buf.position() != 0 {
-            write!(self.buf, "\n");
+            writeln!(self.buf);
             self.sibling = false;
         }
     }

@@ -122,7 +122,7 @@ impl Debug for Symbols<'_> {
         for x in self.clone() {
             match x {
                 Symbol::Literal(x) => write!(f, "{:02x}", x)?,
-                Symbol::Meta(x) => write!(f, "${}", x as u32)?,
+                Symbol::Meta(x) => write!(f, "${}", u32::from(x))?,
                 Symbol::Open => write!(f, "[")?,
                 Symbol::Close => write!(f, "]")?,
             }
@@ -472,7 +472,7 @@ pub struct InternalMatches<'p, 'i> {
 impl<'p, 'i> InternalMatches<'p, 'i> {
     fn new(pattern: Symbols<'p>, input: Symbols<'i>, in_len: usize) -> Self {
         // Degenerate case, should prevent at pattern compilation time.
-        assert!(pattern.buf.len() != 0);
+        assert!(!pattern.buf.is_empty());
         InternalMatches {
             pattern,
             orig_input: input.clone(),
@@ -504,7 +504,7 @@ impl<'p, 'i> Iterator for InternalMatches<'p, 'i> {
                 return Some(trace);
             }
         }
-        return None;
+        None
     }
 }
 
@@ -562,5 +562,5 @@ fn is_match(pattern: Symbols, input: &mut Symbols) -> bool {
         }
     }
     //trace!("is_match: true!");
-    return true;
+    true
 }

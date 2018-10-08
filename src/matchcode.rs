@@ -1,6 +1,5 @@
 /// Lower metasyn AST to regex-matchable IR
 
-#[allow(unused)]
 use log::trace;
 use syn::visit::Visit;
 
@@ -111,7 +110,7 @@ impl<'ast> InnerVisitor<'ast> for Binder<'ast> {
             if x >= self.bindings.len() {
                 self.bindings.resize(x + 1, None);
             }
-            if let None = self.bindings[x] {
+            if self.bindings[x].is_none() {
                 self.bindings[x] = Some(Binding::Expr(expr));
             }
             return Err(());
@@ -124,7 +123,7 @@ impl<'ast> InnerVisitor<'ast> for Binder<'ast> {
             if x >= self.bindings.len() {
                 self.bindings.resize(x + 1, None);
             }
-            if let None = self.bindings[x] {
+            if self.bindings[x].is_none() {
                 self.bindings[x] = Some(Binding::Ident(ident));
             }
             return Err(());
