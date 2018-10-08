@@ -160,13 +160,13 @@ impl Emitter for JsonEmitter {
 
 /// An AST visitor that compares compiled MatchCode for a pattern with the AST for that pattern's
 /// <nodes> or <ids> tree to emit a representation of the pattern.
-pub(crate) struct ReprGenerator<E> {
+pub(crate) struct ReprGenerator<'t, E> {
     emitter: E,
-    trace: ReTracer,
+    trace: ReTracer<'t>,
 }
 
-impl<E: Emitter> ReprGenerator<E> {
-    pub fn new(old: Trace, emitter: E) -> Self {
+impl<'t, E: Emitter> ReprGenerator<'t, E> {
+    pub fn new(old: &'t Trace, emitter: E) -> Self {
         let trace = ReTracer::new(old);
         ReprGenerator { emitter, trace }
     }
@@ -176,7 +176,7 @@ impl<E: Emitter> ReprGenerator<E> {
     }
 }
 
-impl<E: Emitter> Visitor<'_> for ReprGenerator<E> {
+impl<'t, 'ast, E: Emitter> Visitor<'ast> for ReprGenerator<'t, E> {
     fn open_expr(&mut self, x: &syn::Expr) -> Result<(), ()> {
         if let Err(()) = self.trace.open_subtree() {
             let x = u32::from(self.trace.consume_meta());

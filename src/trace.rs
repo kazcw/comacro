@@ -224,19 +224,17 @@ impl Tracer {
     }
 }
 
-// TODO: borrow bufs for read-only Tracers
-// XXX: this should be pub(crate)
 /// instead of emitting a Trace, follow along with a previous, noting any differing subtrees
-pub struct ReTracer {
-    buf: Vec<u8>,
+pub struct ReTracer<'a> {
+    buf: &'a [u8],
     datum: Option<usize>,
     i: usize,
     diff_depth: usize,
 }
 
-impl ReTracer {
-    pub fn new(trace: Trace) -> Self {
-        let buf = trace.buf;
+impl<'t> ReTracer<'t> {
+    pub fn new(trace: &'t Trace) -> Self {
+        let buf = &trace.buf;
         ReTracer {
             buf,
             datum: None,
@@ -413,13 +411,13 @@ impl TxTracer {
 }
 
 /// build a new Tracer, following along with a previous trace and noting differences
-pub(crate) struct DeltaTracer {
-    old: ReTracer,
+pub(crate) struct DeltaTracer<'t> {
+    old: ReTracer<'t>,
     pub new: TxTracer,
 }
 
-impl DeltaTracer {
-    pub fn new(old: Trace) -> Self {
+impl<'t> DeltaTracer<'t> {
+    pub fn new(old: &'t Trace) -> Self {
         let old_len = old.buf.len();
         let old = ReTracer::new(old);
         let new = TxTracer::new(Tracer {

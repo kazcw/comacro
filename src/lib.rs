@@ -146,16 +146,16 @@ impl Iterator for Matches<'_, '_, '_> {
                 Match { context, bindings }
             }),
             MatchesInner::Expr { matches } => matches.next().map(|m| {
-                let context = crate::ast::stmts_tree_repr_of(m.clone(), self.input);
+                let context = crate::ast::stmts_tree_repr_of(&m, self.input);
                 let extracted =
-                    crate::ast::bind_expr(crate::trace::ReTracer::new(m), self.input);
+                    crate::ast::bind_expr(crate::trace::ReTracer::new(&m), self.input);
                 let ex = if let crate::ast::Binding::Expr(ex) = extracted.binds[0] {
                     ex
                 } else {
                     unreachable!()
                 };
                 let bindings = crate::ast::bind_expr_expr(
-                    crate::trace::ReTracer::new(self.pattern.clone()),
+                    crate::trace::ReTracer::new(&self.pattern),
                     ex,
                 );
                 let bindings = crate::ast::bindings_repr(&bindings);
@@ -209,7 +209,7 @@ impl Input {
     }
 
     pub fn debug_tree_repr(&self) -> String {
-        ast::stmts_tree_repr_of(ast::compile_input(&self.stmts).deindex(), &self.stmts)
+        ast::stmts_tree_repr_of(&ast::compile_input(&self.stmts).deindex(), &self.stmts)
     }
 }
 

@@ -67,10 +67,10 @@ impl InnerVisitor<'_> for MatchCodeGenerator {
     }
 }
 
-struct Reconciler {
-    trace: DeltaTracer,
+struct Reconciler<'t> {
+    trace: DeltaTracer<'t>,
 }
-impl InnerVisitor<'_> for Reconciler {
+impl<'t, 'a> InnerVisitor<'a> for Reconciler<'t> {
     fn close_ident(&mut self, x: &syn::Ident) {
         if let Ok(()) = self.trace.close_subtree() {
             return;
@@ -128,12 +128,12 @@ pub enum Binding<'ast> {
 pub struct Bindings<'ast> {
     pub binds: Vec<Binding<'ast>>,
 }
-struct Binder<'ast> {
-    trace: ReTracer,
+struct Binder<'ast, 't> {
+    trace: ReTracer<'t>,
     bindings: Vec<Option<Binding<'ast>>>,
 }
-impl<'ast> Binder<'ast> {
-    fn new(trace: ReTracer) -> Self {
+impl<'ast, 't> Binder<'ast, 't> {
+    fn new(trace: ReTracer<'t>) -> Self {
         Binder {
             trace,
             bindings: Vec::new(),
@@ -148,7 +148,7 @@ impl<'ast> Binder<'ast> {
     }
 }
 
-impl<'ast> InnerVisitor<'ast> for Binder<'ast> {
+impl<'ast, 't> InnerVisitor<'ast> for Binder<'ast, 't> {
     fn open_expr(&mut self, expr: &'ast syn::Expr) -> Result<(), ()> {
         if let Err(()) = self.trace.open_subtree() {
             let x = usize::from(self.trace.consume_meta()) - 1;
@@ -248,7 +248,7 @@ pub fn compile_stmts(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> Trace {
     trace!("nds: {:?}", nodetrace);
     let mut idviz = Visitor {
         inner: Reconciler {
-            trace: DeltaTracer::new(nodetrace),
+            trace: DeltaTracer::new(&nodetrace),
         },
     };
     ids.iter().for_each(|s| idviz.visit_stmt(s));
@@ -267,7 +267,7 @@ pub fn compile_expr(nodes: &syn::Expr, ids: &syn::Expr) -> Trace {
     trace!("nds: {:?}", nodetrace);
     let mut idviz = Visitor {
         inner: Reconciler {
-            trace: DeltaTracer::new(nodetrace),
+            trace: DeltaTracer::new(&nodetrace),
         },
     };
     idviz.visit_expr(ids);
@@ -291,7 +291,7 @@ pub fn compile_input(stmts: &[syn::Stmt]) -> IndexedTrace {
     trace
 }
 
-pub fn stmts_tree_repr_of(trace: Trace, input: &[syn::Stmt]) -> String {
+pub fn stmts_tree_repr_of(trace: &Trace, input: &[syn::Stmt]) -> String {
     let mut viz = Visitor {
         inner: ReprGenerator::new(trace, JsonEmitter::new()),
     };
@@ -306,7 +306,7 @@ pub fn stmts_tree_repr(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> String {
 pub fn stmts_flat_repr(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> String {
     let mc = compile_stmts(nodes, ids);
     let mut viz = Visitor {
-        inner: ReprGenerator::new(mc, ReprEmitter::new()),
+        inner: ReprGenerator::new(&mc, ReprEmitter::new()),
     };
     nodes.iter().for_each(|s| viz.visit_stmt(s));
     String::from_utf8(viz.inner.finish()).unwrap()
@@ -314,7 +314,7 @@ pub fn stmts_flat_repr(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> String {
 
 pub fn expr_tree_repr_of(trace: Trace, input: &syn::Expr) -> String {
     let mut viz = Visitor {
-        inner: ReprGenerator::new(trace, JsonEmitter::new()),
+        inner: ReprGenerator::new(&trace, JsonEmitter::new()),
     };
     viz.visit_expr(input);
     String::from_utf8(viz.inner.finish()).unwrap()
@@ -327,14 +327,14 @@ pub fn expr_tree_repr(nodes: &syn::Expr, ids: &syn::Expr) -> String {
 pub fn expr_flat_repr(nodes: &syn::Expr, ids: &syn::Expr) -> String {
     let mc = compile_expr(nodes, ids);
     let mut viz = Visitor {
-        inner: ReprGenerator::new(mc, ReprEmitter::new()),
+        inner: ReprGenerator::new(&mc, ReprEmitter::new()),
     };
     viz.visit_expr(nodes);
     String::from_utf8(viz.inner.finish()).unwrap()
 }
 
 pub fn bind_stmts<'a>(pat: &Trace, stmts: &'a [syn::Stmt]) -> Bindings<'a> {
-    let trace = ReTracer::new(pat.clone());
+    let trace = ReTracer::new(pat);
     let mut viz = Visitor {
         inner: Binder::new(trace),
     };
@@ -342,7 +342,7 @@ pub fn bind_stmts<'a>(pat: &Trace, stmts: &'a [syn::Stmt]) -> Bindings<'a> {
     viz.inner.finish()
 }
 
-pub fn bind_expr(trace: ReTracer, stmts: &[syn::Stmt]) -> Bindings {
+pub fn bind_expr<'a>(trace: ReTracer, stmts: &'a [syn::Stmt]) -> Bindings<'a> {
     let mut viz = Visitor {
         inner: Binder::new(trace),
     };
@@ -350,7 +350,7 @@ pub fn bind_expr(trace: ReTracer, stmts: &[syn::Stmt]) -> Bindings {
     viz.inner.finish()
 }
 
-pub fn bind_expr_expr(trace: ReTracer, expr: &syn::Expr) -> Bindings {
+pub fn bind_expr_expr<'a>(trace: ReTracer, expr: &'a syn::Expr) -> Bindings<'a> {
     let mut viz = Visitor {
         inner: Binder::new(trace),
     };
