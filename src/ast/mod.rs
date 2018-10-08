@@ -1,11 +1,15 @@
-//! Lower metasyn AST to regex-matchable IR
+//! Operations on syn AST
+
+mod names;
+mod repr;
+mod visitor;
 
 use log::trace;
 use syn::visit::Visit;
 
-use crate::repr::*;
+use self::repr::*;
 use crate::trace::*;
-use crate::visitor::Visitor as InnerVisitor;
+use self::visitor::Visitor as InnerVisitor;
 
 // escape all pseudo-Metas
 // length-prefix varlens (Datum) so they compare correctly
