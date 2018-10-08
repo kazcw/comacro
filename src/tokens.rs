@@ -30,7 +30,13 @@ impl<'a, It, F> MacBodyTransducer<'a, It, F> {
     fn new(ts: It, defs: &'a DefMap, tokenize: &'a F) -> Self {
         let state = MacBodyState::AwaitingDollar;
         let cont = Vec::new();
-        MacBodyTransducer { ts, defs, state, cont, tokenize }
+        MacBodyTransducer {
+            ts,
+            defs,
+            state,
+            cont,
+            tokenize,
+        }
     }
 }
 
@@ -52,8 +58,12 @@ impl MetaDef {
     // - always differ from the corresponding id_token
     fn node_token(&self) -> TokenTree {
         match self.node {
-            self::NodeType::Ident => syn::Ident::new("__IDENT", proc_macro2::Span::call_site()).into(),
-            self::NodeType::Expr => syn::Ident::new("__EXPR", proc_macro2::Span::call_site()).into(),
+            self::NodeType::Ident => {
+                syn::Ident::new("__IDENT", proc_macro2::Span::call_site()).into()
+            }
+            self::NodeType::Expr => {
+                syn::Ident::new("__EXPR", proc_macro2::Span::call_site()).into()
+            }
         }
     }
 
@@ -63,14 +73,21 @@ impl MetaDef {
     // - encode a mvar id
     fn id_token(&self) -> TokenTree {
         match self.node {
-            self::NodeType::Ident => syn::Ident::new(&format!("IDENT_{}", self.id), proc_macro2::Span::call_site()).into(),
+            self::NodeType::Ident => syn::Ident::new(
+                &format!("IDENT_{}", self.id),
+                proc_macro2::Span::call_site(),
+            ).into(),
             //self::NodeType::Expr => proc_macro2::Literal::u32_suffixed(self.id).into()
-            self::NodeType::Expr => syn::Ident::new(&format!("EXPR_{}", self.id), proc_macro2::Span::call_site()).into(),
+            self::NodeType::Expr => {
+                syn::Ident::new(&format!("EXPR_{}", self.id), proc_macro2::Span::call_site()).into()
+            }
         }
     }
 }
 
-impl<'a, It: Iterator<Item = TokenTree>, F: Fn(&MetaDef) -> TokenTree> Iterator for MacBodyTransducer<'a, It, F> {
+impl<'a, It: Iterator<Item = TokenTree>, F: Fn(&MetaDef) -> TokenTree> Iterator
+    for MacBodyTransducer<'a, It, F>
+{
     type Item = TokenTree;
 
     fn next(&mut self) -> Option<TokenTree> {
@@ -91,9 +108,10 @@ impl<'a, It: Iterator<Item = TokenTree>, F: Fn(&MetaDef) -> TokenTree> Iterator 
             }
             (AwaitingDollar, Some(Group(ref g))) => {
                 let delim = g.delimiter();
-                let ts = MacBodyTransducer::new(g.stream().into_iter(), self.defs, self.tokenize).collect();
+                let ts = MacBodyTransducer::new(g.stream().into_iter(), self.defs, self.tokenize)
+                    .collect();
                 Some(proc_macro2::Group::new(delim, ts).into())
-            },
+            }
             (AwaitingDollar, x) => x,
             (AwaitingIdent, Some(Ident(id))) => {
                 self.state = AwaitingDollar;
@@ -166,7 +184,8 @@ impl MetaContext {
     }
 
     pub fn apply(&self, ts: TokenStream) -> (TokenStream, TokenStream) {
-        let nodes = MacBodyTransducer::new(ts.clone().into_iter(), &self.bindings, &MetaDef::node_token);
+        let nodes =
+            MacBodyTransducer::new(ts.clone().into_iter(), &self.bindings, &MetaDef::node_token);
         let ids = MacBodyTransducer::new(ts.into_iter(), &self.bindings, &MetaDef::id_token);
         (nodes.collect(), ids.collect())
     }

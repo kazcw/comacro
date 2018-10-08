@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Trace {
-    buf: Vec<u8>
+    buf: Vec<u8>,
 }
 
 const META: u8 = 255;
@@ -20,7 +20,10 @@ pub struct IndexedTrace {
 
 impl IndexedTrace {
     fn traces(&self) -> Traces {
-        Traces { master: &self, i: 0 }
+        Traces {
+            master: &self,
+            i: 0,
+        }
     }
 
     // XXX this should not need to exist
@@ -40,7 +43,12 @@ impl<'a> Iterator for Traces<'a> {
         if let Some(&offs) = self.master.indexes.get(self.i) {
             let i = self.i;
             self.i += 1;
-            Some((i, Symbols { buf: &self.master.trace.buf[offs..] }))
+            Some((
+                i,
+                Symbols {
+                    buf: &self.master.trace.buf[offs..],
+                },
+            ))
         } else {
             None
         }
@@ -73,7 +81,9 @@ enum Symbol {
 }
 
 #[derive(Clone)]
-struct Symbols<'a> { buf: &'a [u8] }
+struct Symbols<'a> {
+    buf: &'a [u8],
+}
 
 impl<'a> Iterator for Symbols<'a> {
     type Item = Symbol;
@@ -149,7 +159,9 @@ impl Tracer {
 
     pub fn extend_bytes(&mut self, data: &[u8]) {
         // TODO: less pessimal impl?
-        for x in data { self.push_byte(*x); }
+        for x in data {
+            self.push_byte(*x);
+        }
     }
 
     pub fn open_subtree(&mut self) {
@@ -205,7 +217,10 @@ impl Tracer {
     }
 
     pub fn finish_with_indexes(self) -> IndexedTrace {
-        IndexedTrace { trace: Trace { buf: self.buf }, indexes: self.indexes }
+        IndexedTrace {
+            trace: Trace { buf: self.buf },
+            indexes: self.indexes,
+        }
     }
 }
 
@@ -222,7 +237,12 @@ pub struct ReTracer {
 impl ReTracer {
     pub fn new(trace: Trace) -> Self {
         let buf = trace.buf;
-        ReTracer { buf, datum: None, i: 0, diff_depth: 0 }
+        ReTracer {
+            buf,
+            datum: None,
+            i: 0,
+            diff_depth: 0,
+        }
     }
     pub fn finish(self) {
         // it's a programming error to attempt to complete a trace inside a subtree
@@ -234,7 +254,9 @@ impl ReTracer {
     }
 
     pub fn push_byte(&mut self, data: u8) {
-        if self.diff_depth != 0 { return; }
+        if self.diff_depth != 0 {
+            return;
+        }
         if self.buf[self.i] != data {
             self.diff_depth = 1;
             return;
@@ -251,7 +273,9 @@ impl ReTracer {
 
     pub fn extend_bytes(&mut self, data: &[u8]) {
         // TODO: less pessimal impl?
-        for x in data { self.push_byte(*x); }
+        for x in data {
+            self.push_byte(*x);
+        }
     }
 
     /// on failure, nothing has been consumed
@@ -260,7 +284,7 @@ impl ReTracer {
         if self.diff_depth != 0 {
             self.diff_depth += 1;
             // if parent mismatched, our status is neither here nor there
-            return Ok(())
+            return Ok(());
         }
         if self.buf[self.i] == META && self.buf[self.i + 1] == OPEN {
             self.i += 2;
@@ -332,7 +356,12 @@ pub(crate) struct TxTracer {
 
 impl TxTracer {
     pub fn new(trace: Tracer) -> Self {
-        TxTracer { trace, replacement: Tracer::default(), stack: Vec::new(), rollbacks: 0 }
+        TxTracer {
+            trace,
+            replacement: Tracer::default(),
+            stack: Vec::new(),
+            rollbacks: 0,
+        }
     }
     pub fn finish(self) -> Trace {
         assert!(self.stack.is_empty());
@@ -341,10 +370,18 @@ impl TxTracer {
         self.trace.finish()
     }
 
-    pub fn push_byte(&mut self, data: u8) { self.trace.push_byte(data); }
-    pub fn extend_bytes(&mut self, data: &[u8]) { self.trace.extend_bytes(data); }
-    pub fn open_datum(&mut self) { self.trace.open_datum(); }
-    pub fn close_datum(&mut self) { self.trace.close_datum(); }
+    pub fn push_byte(&mut self, data: u8) {
+        self.trace.push_byte(data);
+    }
+    pub fn extend_bytes(&mut self, data: &[u8]) {
+        self.trace.extend_bytes(data);
+    }
+    pub fn open_datum(&mut self) {
+        self.trace.open_datum();
+    }
+    pub fn close_datum(&mut self) {
+        self.trace.close_datum();
+    }
 
     pub fn open_subtree(&mut self) {
         self.stack.push(self.trace.buf.len());
@@ -363,7 +400,7 @@ impl TxTracer {
                 self.trace.buf.extend(&self.replacement.buf);
                 self.replacement.buf.clear();
             }
-            //trace!("TxTracer::close_subtree: rollback: splice: {:?}", self.trace);
+        //trace!("TxTracer::close_subtree: rollback: splice: {:?}", self.trace);
         } else {
             //trace!("TxTracer::close_subtree: {:?}", self.trace);
         }
@@ -385,7 +422,10 @@ impl DeltaTracer {
     pub fn new(old: Trace) -> Self {
         let old_len = old.buf.len();
         let old = ReTracer::new(old);
-        let new = TxTracer::new (Tracer { buf: Vec::with_capacity(old_len), ..Tracer::default()});
+        let new = TxTracer::new(Tracer {
+            buf: Vec::with_capacity(old_len),
+            ..Tracer::default()
+        });
         DeltaTracer { old, new }
     }
     pub fn finish(self) -> Trace {
@@ -450,7 +490,10 @@ impl Trace {
 
     /// Return iterator of top-level matches
     pub fn toplevel_matches<'s, 'i>(&'s self, input: &'i IndexedTrace) -> ToplevelMatches<'s, 'i> {
-        ToplevelMatches { pattern: self.symbols(), inputs: input.traces() }
+        ToplevelMatches {
+            pattern: self.symbols(),
+            inputs: input.traces(),
+        }
     }
 
     /// Search the input for this pattern at any depth. Return an iterator that, for each match,
@@ -507,7 +550,6 @@ impl<'p, 'i> Iterator for InternalMatches<'p, 'i> {
         None
     }
 }
-
 
 /////// The Matching. Expected Hot Path <<EOF
 

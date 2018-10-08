@@ -1,5 +1,5 @@
-use std::io::Write;
 use std::fmt::Display;
+use std::io::Write;
 
 use crate::trace::*;
 use crate::visitor::Visitor;
@@ -27,7 +27,9 @@ impl ReprEmitter {
     }
 
     fn maybe_comma(&mut self) {
-        if self.sibling { self.comma(); }
+        if self.sibling {
+            self.comma();
+        }
     }
 
     fn comma(&mut self) {
@@ -89,17 +91,27 @@ impl JsonEmitter {
         let mut buf = std::io::Cursor::new(Vec::new());
         write!(buf, "[");
         let sibling = false;
-        JsonEmitter { buf, sibling, scalar_context: false }
+        JsonEmitter {
+            buf,
+            sibling,
+            scalar_context: false,
+        }
     }
 
     pub fn new_scalar() -> Self {
         let buf = std::io::Cursor::new(Vec::new());
         let sibling = false;
-        JsonEmitter { buf, sibling, scalar_context: true }
+        JsonEmitter {
+            buf,
+            sibling,
+            scalar_context: true,
+        }
     }
 
     fn maybe_comma(&mut self) {
-        if self.sibling { self.comma(); }
+        if self.sibling {
+            self.comma();
+        }
     }
 
     fn comma(&mut self) {
@@ -209,12 +221,24 @@ impl<E: Emitter> Visitor<'_> for ReprGenerator<E> {
         self.emitter.closer();
     }
 
-    fn open_subtree(&mut self) { self.trace.open_subtree().unwrap(); }
-    fn close_subtree(&mut self) { self.trace.close_subtree().unwrap(); }
-    fn open_datum(&mut self) { self.trace.open_datum(); }
-    fn close_datum(&mut self) { self.trace.close_datum(); }
-    fn push_byte(&mut self, x: u8) { self.trace.push_byte(x); }
-    fn extend_bytes(&mut self, x: &[u8]) { self.trace.extend_bytes(x); }
+    fn open_subtree(&mut self) {
+        self.trace.open_subtree().unwrap();
+    }
+    fn close_subtree(&mut self) {
+        self.trace.close_subtree().unwrap();
+    }
+    fn open_datum(&mut self) {
+        self.trace.open_datum();
+    }
+    fn close_datum(&mut self) {
+        self.trace.close_datum();
+    }
+    fn push_byte(&mut self, x: u8) {
+        self.trace.push_byte(x);
+    }
+    fn extend_bytes(&mut self, x: &[u8]) {
+        self.trace.extend_bytes(x);
+    }
 }
 
 /// Serialize a normal AST (no metavars)
@@ -231,7 +255,6 @@ impl<E: Emitter> PlainAstRepr<E> {
         self.emitter.finish()
     }
 }
-
 
 impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
     fn open_expr(&mut self, x: &syn::Expr) -> Result<(), ()> {
@@ -270,4 +293,3 @@ impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
     fn push_byte(&mut self, x: u8) {}
     fn extend_bytes(&mut self, x: &[u8]) {}
 }
-

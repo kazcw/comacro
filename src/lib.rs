@@ -11,11 +11,11 @@ pub use crate::matchcode::compile_input;
 
 use crate::trace::Trace;
 
+use crate::tokens::MetaContext;
 use log::trace;
 use proc_macro2::TokenStream;
-use syn::parse::Parse;
-use crate::tokens::MetaContext;
 use std::fmt::{Display, Formatter};
+use syn::parse::Parse;
 
 #[derive(Debug)]
 pub struct Error;
@@ -46,11 +46,14 @@ impl Parse for Stmts {
     }
 }
 
-pub struct PatternDef{ nodes: TokenStream, ids: TokenStream }
+pub struct PatternDef {
+    nodes: TokenStream,
+    ids: TokenStream,
+}
 impl PatternDef {
     pub fn lex(args: TokenStream, body: TokenStream) -> PatternDef {
         let (nodes, ids) = MetaContext::new(args).apply(body);
-        PatternDef{ nodes, ids }
+        PatternDef { nodes, ids }
     }
 
     pub fn parse(self) -> Result<Pattern> {
@@ -66,29 +69,41 @@ impl PatternDef {
         let (mut nodes, mut ids) = (nodes.0, ids.0);
         if nodes.len() == 1 {
             if let syn::Stmt::Expr(_) = nodes[0] {
-                if let (syn::Stmt::Expr(nodes), syn::Stmt::Expr(ids)) = (nodes.remove(0), ids.remove(0)) {
-                    return Ok(Pattern::Expr{ nodes, ids });
+                if let (syn::Stmt::Expr(nodes), syn::Stmt::Expr(ids)) =
+                    (nodes.remove(0), ids.remove(0))
+                {
+                    return Ok(Pattern::Expr { nodes, ids });
                 }
                 unreachable!();
             }
         }
-        Ok(Pattern::StmtSeq{ nodes, ids })
+        Ok(Pattern::StmtSeq { nodes, ids })
     }
 }
 
 pub enum Pattern {
-    StmtSeq { nodes: Vec<syn::Stmt>, ids: Vec<syn::Stmt> },
-    Expr { nodes: syn::Expr, ids: syn::Expr },
+    StmtSeq {
+        nodes: Vec<syn::Stmt>,
+        ids: Vec<syn::Stmt>,
+    },
+    Expr {
+        nodes: syn::Expr,
+        ids: syn::Expr,
+    },
 }
 
-pub enum Ir { 
+pub enum Ir {
     StmtSeq { trace: Trace },
     Expr { trace: Trace },
 }
 
 enum MatchesInner<'p, 'it> {
-    StmtSeq { matches: crate::trace::ToplevelMatches<'p, 'it> },
-    Expr { matches: crate::trace::InternalMatches<'p, 'it> },
+    StmtSeq {
+        matches: crate::trace::ToplevelMatches<'p, 'it>,
+    },
+    Expr {
+        matches: crate::trace::InternalMatches<'p, 'it>,
+    },
 }
 
 #[derive(Debug)]
@@ -117,26 +132,35 @@ impl Iterator for Matches<'_, '_, '_> {
                     first = false;
                     context.push_str(&crate::matchcode::stmt_repr(s));
                 }
-                if !first { context.push_str(","); }
+                if !first {
+                    context.push_str(",");
+                }
                 context.push_str("\"$1\"");
-                for s in &self.input[m+self.pattern.toplevel_len()..] {
+                for s in &self.input[m + self.pattern.toplevel_len()..] {
                     context.push_str(",");
                     context.push_str(&crate::matchcode::stmt_repr(s));
                 }
                 context.push_str("]");
-                let bindings = crate::matchcode::bind_stmts(self.pattern, &self.input[m..m + self.pattern.toplevel_len()]);
+                let bindings = crate::matchcode::bind_stmts(
+                    self.pattern,
+                    &self.input[m..m + self.pattern.toplevel_len()],
+                );
                 let bindings = crate::matchcode::bindings_repr(&bindings);
                 Match { context, bindings }
             }),
             MatchesInner::Expr { matches } => matches.next().map(|m| {
                 let context = crate::matchcode::stmts_tree_repr_of(m.clone(), self.input);
-                let extracted = crate::matchcode::bind_expr(crate::trace::ReTracer::new(m), self.input);
+                let extracted =
+                    crate::matchcode::bind_expr(crate::trace::ReTracer::new(m), self.input);
                 let ex = if let crate::matchcode::Binding::Expr(ex) = extracted.binds[0] {
                     ex
                 } else {
                     unreachable!()
                 };
-                let bindings = crate::matchcode::bind_expr_expr(crate::trace::ReTracer::new(self.pattern.clone()), ex);
+                let bindings = crate::matchcode::bind_expr_expr(
+                    crate::trace::ReTracer::new(self.pattern.clone()),
+                    ex,
+                );
                 let bindings = crate::matchcode::bindings_repr(&bindings);
                 Match { context, bindings }
             }),
@@ -145,20 +169,36 @@ impl Iterator for Matches<'_, '_, '_> {
 }
 
 impl Ir {
-    pub fn matches<'p, 'i, 'it>(&'p self, input: &'i [syn::Stmt], input_trace: &'it crate::trace::IndexedTrace) -> Matches<'p, 'i, 'it> {
+    pub fn matches<'p, 'i, 'it>(
+        &'p self,
+        input: &'i [syn::Stmt],
+        input_trace: &'it crate::trace::IndexedTrace,
+    ) -> Matches<'p, 'i, 'it> {
         let (inner, pattern) = match self {
-            Ir::StmtSeq { trace } => {
-                (MatchesInner::StmtSeq { matches: trace.toplevel_matches(input_trace) }, trace)
-            }
-            Ir::Expr { trace } => {
-                (MatchesInner::Expr { matches: trace.internal_matches(input_trace) }, trace)
-            }
+            Ir::StmtSeq { trace } => (
+                MatchesInner::StmtSeq {
+                    matches: trace.toplevel_matches(input_trace),
+                },
+                trace,
+            ),
+            Ir::Expr { trace } => (
+                MatchesInner::Expr {
+                    matches: trace.internal_matches(input_trace),
+                },
+                trace,
+            ),
         };
-        Matches { inner, pattern, input }
+        Matches {
+            inner,
+            pattern,
+            input,
+        }
     }
 }
 
-pub struct Input { pub stmts: Vec<syn::Stmt> }
+pub struct Input {
+    pub stmts: Vec<syn::Stmt>,
+}
 
 impl Input {
     pub fn parse(ts: TokenStream) -> Result<Self> {
@@ -179,8 +219,12 @@ impl Input {
 impl Pattern {
     pub fn compile(&self) -> Ir {
         match self {
-            Pattern::StmtSeq { nodes, ids } => Ir::StmtSeq { trace: matchcode::compile_stmts(nodes, ids) },
-            Pattern::Expr { nodes, ids } => Ir::Expr { trace: matchcode::compile_expr(nodes, ids) },
+            Pattern::StmtSeq { nodes, ids } => Ir::StmtSeq {
+                trace: matchcode::compile_stmts(nodes, ids),
+            },
+            Pattern::Expr { nodes, ids } => Ir::Expr {
+                trace: matchcode::compile_expr(nodes, ids),
+            },
         }
     }
 
@@ -208,6 +252,10 @@ impl Pattern {
 
 impl Display for PatternDef {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        write!(fmt, "PatternDef {{ nodes: {}, ids: {} }}", &self.nodes, &self.ids)
+        write!(
+            fmt,
+            "PatternDef {{ nodes: {}, ids: {} }}",
+            &self.nodes, &self.ids
+        )
     }
 }

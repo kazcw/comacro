@@ -1,4 +1,4 @@
-/// Lower metasyn AST to regex-matchable IR
+//! Lower metasyn AST to regex-matchable IR
 
 use log::trace;
 use syn::visit::Visit;
@@ -39,31 +39,55 @@ struct Visitor<V> {
 }
 
 #[derive(Default)]
-struct MatchCodeGenerator { trace: Tracer }
+struct MatchCodeGenerator {
+    trace: Tracer,
+}
 impl InnerVisitor<'_> for MatchCodeGenerator {
-    fn open_subtree(&mut self) { self.trace.open_subtree(); }
-    fn close_subtree(&mut self) { self.trace.close_subtree(); }
-    fn open_datum(&mut self) { self.trace.open_datum(); }
-    fn close_datum(&mut self) { self.trace.close_datum(); }
-    fn push_byte(&mut self, x: u8) { self.trace.push_byte(x); }
-    fn extend_bytes(&mut self, x: &[u8]) { self.trace.extend_bytes(x); }
+    fn open_subtree(&mut self) {
+        self.trace.open_subtree();
+    }
+    fn close_subtree(&mut self) {
+        self.trace.close_subtree();
+    }
+    fn open_datum(&mut self) {
+        self.trace.open_datum();
+    }
+    fn close_datum(&mut self) {
+        self.trace.close_datum();
+    }
+    fn push_byte(&mut self, x: u8) {
+        self.trace.push_byte(x);
+    }
+    fn extend_bytes(&mut self, x: &[u8]) {
+        self.trace.extend_bytes(x);
+    }
 }
 
-struct Reconciler { trace: DeltaTracer }
+struct Reconciler {
+    trace: DeltaTracer,
+}
 impl InnerVisitor<'_> for Reconciler {
     fn close_ident(&mut self, x: &syn::Ident) {
-        if let Ok(()) = self.trace.close_subtree() { return; }
+        if let Ok(()) = self.trace.close_subtree() {
+            return;
+        }
         let x = x.to_string();
         let x_id = x.trim_left_matches("IDENT_");
         let x_expr = x.trim_left_matches("EXPR_");
         if x_id != x {
             // replace current
-            self.trace.new.replacement.push_mvar(u8::from_str_radix(x_id, 10).unwrap());
+            self.trace
+                .new
+                .replacement
+                .push_mvar(u8::from_str_radix(x_id, 10).unwrap());
             self.trace.new.rollback(0);
             self.trace.new.close_subtree();
         } else if x_expr != x {
             // replace parent
-            self.trace.new.replacement.push_mvar(u8::from_str_radix(x_expr, 10).unwrap());
+            self.trace
+                .new
+                .replacement
+                .push_mvar(u8::from_str_radix(x_expr, 10).unwrap());
             self.trace.new.rollback(1);
             self.trace.new.close_subtree();
         } else {
@@ -71,12 +95,24 @@ impl InnerVisitor<'_> for Reconciler {
         }
     }
 
-    fn open_subtree(&mut self) { self.trace.open_subtree().unwrap(); }
-    fn close_subtree(&mut self) { self.trace.close_subtree().unwrap(); }
-    fn open_datum(&mut self) { self.trace.open_datum(); }
-    fn close_datum(&mut self) { self.trace.close_datum(); }
-    fn push_byte(&mut self, x: u8) { self.trace.push_byte(x); }
-    fn extend_bytes(&mut self, x: &[u8]) { self.trace.extend_bytes(x); }
+    fn open_subtree(&mut self) {
+        self.trace.open_subtree().unwrap();
+    }
+    fn close_subtree(&mut self) {
+        self.trace.close_subtree().unwrap();
+    }
+    fn open_datum(&mut self) {
+        self.trace.open_datum();
+    }
+    fn close_datum(&mut self) {
+        self.trace.close_datum();
+    }
+    fn push_byte(&mut self, x: u8) {
+        self.trace.push_byte(x);
+    }
+    fn extend_bytes(&mut self, x: &[u8]) {
+        self.trace.extend_bytes(x);
+    }
 }
 
 #[derive(Clone)]
@@ -94,12 +130,17 @@ struct Binder<'ast> {
 }
 impl<'ast> Binder<'ast> {
     fn new(trace: ReTracer) -> Self {
-        Binder { trace, bindings: Vec::new() }
+        Binder {
+            trace,
+            bindings: Vec::new(),
+        }
     }
 
     fn finish(self) -> Bindings<'ast> {
         self.trace.finish();
-        Bindings { binds: self.bindings.into_iter().map(|x| x.unwrap()).collect() }
+        Bindings {
+            binds: self.bindings.into_iter().map(|x| x.unwrap()).collect(),
+        }
     }
 }
 
@@ -131,26 +172,42 @@ impl<'ast> InnerVisitor<'ast> for Binder<'ast> {
         Ok(())
     }
 
-    fn open_subtree(&mut self) { self.trace.open_subtree().unwrap(); }
-    fn close_subtree(&mut self) { self.trace.close_subtree().unwrap(); }
-    fn open_datum(&mut self) { self.trace.open_datum(); }
-    fn close_datum(&mut self) { self.trace.close_datum(); }
-    fn push_byte(&mut self, x: u8) { self.trace.push_byte(x); }
-    fn extend_bytes(&mut self, x: &[u8]) { self.trace.extend_bytes(x); }
+    fn open_subtree(&mut self) {
+        self.trace.open_subtree().unwrap();
+    }
+    fn close_subtree(&mut self) {
+        self.trace.close_subtree().unwrap();
+    }
+    fn open_datum(&mut self) {
+        self.trace.open_datum();
+    }
+    fn close_datum(&mut self) {
+        self.trace.close_datum();
+    }
+    fn push_byte(&mut self, x: u8) {
+        self.trace.push_byte(x);
+    }
+    fn extend_bytes(&mut self, x: &[u8]) {
+        self.trace.extend_bytes(x);
+    }
 }
 
 /// Outer visitor ensures AST->Trace lowering is consistent for different traversal modes
 impl<'ast, V: InnerVisitor<'ast>> Visit<'ast> for Visitor<V> {
     fn visit_stmt(&mut self, x: &'ast syn::Stmt) {
         self.inner.open_stmt(x);
-        self.inner.push_byte(unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(x)) } as u8);
+        self.inner
+            .push_byte(unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(x)) } as u8);
         syn::visit::visit_stmt(self, x);
         self.inner.close_stmt(x);
     }
 
     fn visit_expr(&mut self, x: &'ast syn::Expr) {
-        if let Err(()) = self.inner.open_expr(x) { return; }
-        self.inner.push_byte(unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(x)) } as u8);
+        if let Err(()) = self.inner.open_expr(x) {
+            return;
+        }
+        self.inner
+            .push_byte(unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(x)) } as u8);
         syn::visit::visit_expr(self, x);
         self.inner.close_expr(x);
     }
@@ -162,7 +219,9 @@ impl<'ast, V: InnerVisitor<'ast>> Visit<'ast> for Visitor<V> {
     }
 
     fn visit_ident(&mut self, x: &'ast syn::Ident) {
-        if let Err(()) = self.inner.open_ident(x) { return; }
+        if let Err(()) = self.inner.open_ident(x) {
+            return;
+        }
         self.inner.extend_bytes(x.to_string().as_bytes());
         self.inner.close_ident(x);
     }
@@ -177,11 +236,17 @@ impl<'ast, V: InnerVisitor<'ast>> Visit<'ast> for Visitor<V> {
 
 /// compile a statement-sequence search pattern
 pub fn compile_stmts(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> Trace {
-    let mut nodeviz = Visitor { inner: MatchCodeGenerator::default() };
+    let mut nodeviz = Visitor {
+        inner: MatchCodeGenerator::default(),
+    };
     nodes.iter().for_each(|s| nodeviz.visit_stmt(s));
     let nodetrace = nodeviz.inner.trace.finish();
     trace!("nds: {:?}", nodetrace);
-    let mut idviz = Visitor { inner: Reconciler { trace: DeltaTracer::new(nodetrace) } };
+    let mut idviz = Visitor {
+        inner: Reconciler {
+            trace: DeltaTracer::new(nodetrace),
+        },
+    };
     ids.iter().for_each(|s| idviz.visit_stmt(s));
     //trace!("compiled: {:?}", idviz.inner.trace.new.trace);
     //Trace { buf: idviz.inner.trace.new.trace.buf }
@@ -190,11 +255,17 @@ pub fn compile_stmts(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> Trace {
 
 /// compile a subexpr search pattern
 pub fn compile_expr(nodes: &syn::Expr, ids: &syn::Expr) -> Trace {
-    let mut nodeviz = Visitor { inner: MatchCodeGenerator::default() };
+    let mut nodeviz = Visitor {
+        inner: MatchCodeGenerator::default(),
+    };
     nodeviz.visit_expr(nodes);
     let nodetrace = nodeviz.inner.trace.finish();
     trace!("nds: {:?}", nodetrace);
-    let mut idviz = Visitor { inner: Reconciler { trace: DeltaTracer::new(nodetrace) } };
+    let mut idviz = Visitor {
+        inner: Reconciler {
+            trace: DeltaTracer::new(nodetrace),
+        },
+    };
     idviz.visit_expr(ids);
     //trace!("compiled: {:?}", idviz.inner.trace.new.trace);
     //Trace { buf: idviz.inner.trace.new.trace.buf }
@@ -203,7 +274,9 @@ pub fn compile_expr(nodes: &syn::Expr, ids: &syn::Expr) -> Trace {
 
 /// compile an input
 pub fn compile_input(stmts: &[syn::Stmt]) -> IndexedTrace {
-    let mut viz = Visitor { inner: MatchCodeGenerator::default() };
+    let mut viz = Visitor {
+        inner: MatchCodeGenerator::default(),
+    };
     viz.inner.trace.expect_marks(stmts.len());
     for s in stmts {
         viz.inner.trace.mark();
@@ -215,7 +288,9 @@ pub fn compile_input(stmts: &[syn::Stmt]) -> IndexedTrace {
 }
 
 pub fn stmts_tree_repr_of(trace: Trace, input: &[syn::Stmt]) -> String {
-    let mut viz = Visitor { inner: ReprGenerator::new(trace, JsonEmitter::new()) };
+    let mut viz = Visitor {
+        inner: ReprGenerator::new(trace, JsonEmitter::new()),
+    };
     input.iter().for_each(|s| viz.visit_stmt(s));
     String::from_utf8(viz.inner.finish()).unwrap()
 }
@@ -226,13 +301,17 @@ pub fn stmts_tree_repr(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> String {
 
 pub fn stmts_flat_repr(nodes: &[syn::Stmt], ids: &[syn::Stmt]) -> String {
     let mc = compile_stmts(nodes, ids);
-    let mut viz = Visitor { inner: ReprGenerator::new(mc, ReprEmitter::new()) };
+    let mut viz = Visitor {
+        inner: ReprGenerator::new(mc, ReprEmitter::new()),
+    };
     nodes.iter().for_each(|s| viz.visit_stmt(s));
     String::from_utf8(viz.inner.finish()).unwrap()
 }
 
 pub fn expr_tree_repr_of(trace: Trace, input: &syn::Expr) -> String {
-    let mut viz = Visitor { inner: ReprGenerator::new(trace, JsonEmitter::new()) };
+    let mut viz = Visitor {
+        inner: ReprGenerator::new(trace, JsonEmitter::new()),
+    };
     viz.visit_expr(input);
     String::from_utf8(viz.inner.finish()).unwrap()
 }
@@ -243,42 +322,48 @@ pub fn expr_tree_repr(nodes: &syn::Expr, ids: &syn::Expr) -> String {
 
 pub fn expr_flat_repr(nodes: &syn::Expr, ids: &syn::Expr) -> String {
     let mc = compile_expr(nodes, ids);
-    let mut viz = Visitor { inner: ReprGenerator::new(mc, ReprEmitter::new()) };
+    let mut viz = Visitor {
+        inner: ReprGenerator::new(mc, ReprEmitter::new()),
+    };
     viz.visit_expr(nodes);
     String::from_utf8(viz.inner.finish()).unwrap()
 }
 
 pub fn bind_stmts<'a>(pat: &Trace, stmts: &'a [syn::Stmt]) -> Bindings<'a> {
     let trace = ReTracer::new(pat.clone());
-    let mut viz = Visitor { inner: Binder::new(trace) };
+    let mut viz = Visitor {
+        inner: Binder::new(trace),
+    };
     stmts.iter().for_each(|s| viz.visit_stmt(s));
     viz.inner.finish()
 }
 
 pub fn bind_expr(trace: ReTracer, stmts: &[syn::Stmt]) -> Bindings {
-    let mut viz = Visitor { inner: Binder::new(trace) };
+    let mut viz = Visitor {
+        inner: Binder::new(trace),
+    };
     stmts.iter().for_each(|s| viz.visit_stmt(s));
     viz.inner.finish()
 }
 
 pub fn bind_expr_expr(trace: ReTracer, expr: &syn::Expr) -> Bindings {
-    let mut viz = Visitor { inner: Binder::new(trace) };
+    let mut viz = Visitor {
+        inner: Binder::new(trace),
+    };
     viz.visit_expr(expr);
     viz.inner.finish()
 }
 
 pub fn bindings_repr(bindings: &'_ Bindings) -> String {
-    let f = |b: &Binding| {
-        match b {
-            Binding::Ident(i) => {
-                format!("[\"Ident\",\"{}\"]", i)
-            }
-            Binding::Expr(x) => {
-                let mut viz = Visitor { inner: PlainAstRepr::new(JsonEmitter::new_scalar()) };
-                viz.visit_expr(x);
-                let s = String::from_utf8(viz.inner.finish()).unwrap();
-                format!("[\"Expr\",{}]", s)
-            }
+    let f = |b: &Binding| match b {
+        Binding::Ident(i) => format!("[\"Ident\",\"{}\"]", i),
+        Binding::Expr(x) => {
+            let mut viz = Visitor {
+                inner: PlainAstRepr::new(JsonEmitter::new_scalar()),
+            };
+            viz.visit_expr(x);
+            let s = String::from_utf8(viz.inner.finish()).unwrap();
+            format!("[\"Expr\",{}]", s)
         }
     };
     let mut buf = "[".to_owned();
@@ -295,8 +380,9 @@ pub fn bindings_repr(bindings: &'_ Bindings) -> String {
 }
 
 pub fn stmt_repr(stmt: &syn::Stmt) -> String {
-    let mut viz = Visitor { inner: PlainAstRepr::new(JsonEmitter::new_scalar()) };
+    let mut viz = Visitor {
+        inner: PlainAstRepr::new(JsonEmitter::new_scalar()),
+    };
     viz.visit_stmt(stmt);
     String::from_utf8(viz.inner.finish()).unwrap()
 }
-
