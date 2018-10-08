@@ -3,6 +3,7 @@ use std::io::Write;
 
 use crate::trace::*;
 use crate::ast::visitor::Visitor;
+use crate::ast::names::Discrim;
 
 pub(crate) trait Emitter {
     fn meta(&mut self, x: u32);
@@ -182,7 +183,7 @@ impl<E: Emitter> Visitor<'_> for ReprGenerator<E> {
             self.emitter.meta(x);
             return Err(());
         }
-        self.emitter.opener(crate::ast::names::expr_discrim(x));
+        self.emitter.opener(x.discrim());
         Ok(())
     }
     fn open_ident(&mut self, x: &syn::Ident) -> Result<(), ()> {
@@ -197,11 +198,11 @@ impl<E: Emitter> Visitor<'_> for ReprGenerator<E> {
     fn open_stmt(&mut self, x: &syn::Stmt) {
         self.open_subtree();
         self.emitter.maybe_break();
-        self.emitter.opener(crate::ast::names::stmt_discrim(x));
+        self.emitter.opener(x.discrim());
     }
     fn open_pat(&mut self, x: &syn::Pat) {
         self.open_subtree();
-        self.emitter.opener(crate::ast::names::pat_discrim(x));
+        self.emitter.opener(x.discrim());
     }
     fn open_lit_int(&mut self, x: &syn::LitInt) {
         self.open_datum();
@@ -258,7 +259,7 @@ impl<E: Emitter> PlainAstRepr<E> {
 
 impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
     fn open_expr(&mut self, x: &syn::Expr) -> Result<(), ()> {
-        self.emitter.opener(crate::ast::names::expr_discrim(x));
+        self.emitter.opener(x.discrim());
         Ok(())
     }
     fn open_ident(&mut self, x: &syn::Ident) -> Result<(), ()> {
@@ -267,10 +268,10 @@ impl<E: Emitter> Visitor<'_> for PlainAstRepr<E> {
     }
     fn open_stmt(&mut self, x: &syn::Stmt) {
         self.emitter.maybe_break();
-        self.emitter.opener(crate::ast::names::stmt_discrim(x));
+        self.emitter.opener(x.discrim());
     }
     fn open_pat(&mut self, x: &syn::Pat) {
-        self.emitter.opener(crate::ast::names::pat_discrim(x));
+        self.emitter.opener(x.discrim());
     }
     fn open_lit_int(&mut self, x: &syn::LitInt) {
         self.emitter.item(x.value());
