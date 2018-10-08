@@ -16,7 +16,11 @@ proc-macro2 = "0.4"
 env_logger = "0.5"
 proc-macro2 = { version = "0.4", features = ["nightly"] }
 
+[features]
+default = ["syn"]
+
 [dependencies.syn]
 version = "0.15"
 default-features = false
 features = ["full", "visit", "parsing"]
+optional = true
